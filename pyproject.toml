@@ -1,0 +1,71 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recsys"
+version = "0.1.0"
+description = "Movie recommender system in PyTorch on MovieLens 1M: Popular, BPR-MF, Two-tower and SASRec."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = [
+    "torch>=2.2",
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "pyarrow>=14",
+    "pyyaml>=6.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
+
+[project.optional-dependencies]
+train = [
+    "tensorboard>=2.16",
+    "matplotlib>=3.8",
+]
+dev = [
+    "recsys[train]",
+    "pytest>=8.0",
+    "httpx>=0.27",
+    "ruff>=0.6",
+    "nbformat>=5.9",
+    "nbconvert>=7.0",
+    "ipykernel>=6.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["notebooks"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "SIM", # flake8-simplify
+    "RUF", # ruff-specific
+]
+ignore = [
+    "N812",   # `import torch.nn.functional as F` is the PyTorch convention
+    "RUF002", # allow unicode (e.g. ×) in docstrings
+    "RUF003",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["recsys"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    "ignore::DeprecationWarning:tensorboard.*",
+]

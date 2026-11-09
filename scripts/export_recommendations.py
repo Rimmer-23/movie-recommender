@@ -12,6 +12,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 from pathlib import Path
 
@@ -28,6 +29,8 @@ def main() -> None:
     parser.add_argument("--output", type=Path, help="default: <artifacts>/recommendations.parquet")
     parser.add_argument("--batch-size", type=int, default=1024)
     args = parser.parse_args()
+    # Movie titles contain non-ASCII characters; don't crash on legacy console encodings.
+    sys.stdout.reconfigure(errors="replace")
 
     start = time.perf_counter()
     service = RecommendationService.from_artifacts(

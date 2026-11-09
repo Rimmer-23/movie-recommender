@@ -23,3 +23,6 @@ htmlcov/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local Claude Code / editor tooling
+.claude/

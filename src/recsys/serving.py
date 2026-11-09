@@ -161,7 +161,8 @@ class RecommendationService:
         frame = frame[np.isfinite(frame["score"])]
         frame["model"] = self.model_name
         frame["generated_at"] = pd.Timestamp(generated_at)
-        return pa.Table.from_pandas(frame, schema=RECOMMENDATIONS_SCHEMA, preserve_index=False)
+        table = pa.Table.from_pandas(frame, schema=RECOMMENDATIONS_SCHEMA, preserve_index=False)
+        return table.replace_schema_metadata(None)  # plain warehouse table, no pandas metadata
 
 
 def write_recommendations(table: pa.Table, path: Path) -> None:

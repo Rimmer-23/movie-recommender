@@ -12,7 +12,7 @@ params:
 train:
   epochs: 200
   batch_size: 128       # users (sequences) per batch
-  lr: 1.0e-3
+  lr: 1.0e-3            # 2e-3 converges faster (valid NDCG@10 0.176 vs 0.164 at epoch 30)
   weight_decay: 0.0
   grad_clip: 5.0
   eval_every: 2

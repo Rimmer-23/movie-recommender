@@ -1,0 +1,21 @@
+# SASRec: causal self-attention over each user's item sequence,
+# full-softmax cross-entropy over all items at every position.
+model: sasrec
+seed: 42
+params:
+  hidden_dim: 64
+  max_len: 200
+  n_blocks: 2
+  n_heads: 1
+  dropout: 0.2
+  init_std: 0.02
+train:
+  epochs: 200
+  batch_size: 128       # users (sequences) per batch
+  lr: 1.0e-3
+  weight_decay: 0.0
+  grad_clip: 5.0
+  eval_every: 2
+  patience: 10          # validation rounds, i.e. 20 epochs
+  monitor: NDCG@10
+  eval_batch_size: 512

@@ -68,4 +68,6 @@ testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = [
     "ignore::DeprecationWarning:tensorboard.*",
+    # Newer Starlette releases nudge TestClient users towards a different HTTP client.
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
 ]

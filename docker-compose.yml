@@ -1,0 +1,15 @@
+# docker compose up --build
+# Serves the best model (artifacts/results.json) at http://localhost:8000.
+services:
+  api:
+    build: .
+    image: movie-recommender:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+      - ./data/processed:/app/data/processed:ro
+    environment:
+      # Leave empty to serve the best model by validation NDCG@10.
+      RECSYS_MODEL: ${RECSYS_MODEL:-}
+    restart: unless-stopped

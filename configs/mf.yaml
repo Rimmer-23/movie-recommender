@@ -3,12 +3,12 @@ model: mf
 seed: 42
 params:
   embedding_dim: 64
-  l2_reg: 1.0e-5        # L2 on the user/pos/neg embeddings of each example
+  l2_reg: 1.0e-5        # L2 on used embeddings; 1e-4 tied (0.0390), 1e-3 worse (0.0371)
   init_std: 0.01
 train:
   epochs: 100
   batch_size: 1024
-  lr: 1.0e-3
+  lr: 1.0e-3            # 3e-3 was worse on validation (0.0371 NDCG@10)
   weight_decay: 0.0
   eval_every: 1
   patience: 5           # validation rounds without NDCG@10 improvement

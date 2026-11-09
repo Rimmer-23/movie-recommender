@@ -8,12 +8,16 @@ import torch
 
 from recsys.config import ExperimentConfig, from_dict
 from recsys.models.base import Recommender, TorchRecommender
+from recsys.models.mf import MFRecommender
 from recsys.models.popular import PopularRecommender
 
-MODEL_REGISTRY: dict[str, type[Recommender]] = {cls.name: cls for cls in (PopularRecommender,)}
+MODEL_REGISTRY: dict[str, type[Recommender]] = {
+    cls.name: cls for cls in (PopularRecommender, MFRecommender)
+}
 
 __all__ = [
     "MODEL_REGISTRY",
+    "MFRecommender",
     "PopularRecommender",
     "Recommender",
     "TorchRecommender",

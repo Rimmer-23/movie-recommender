@@ -1,0 +1,16 @@
+# Matrix Factorization trained with BPR loss and uniform negative sampling.
+model: mf
+seed: 42
+params:
+  embedding_dim: 64
+  l2_reg: 1.0e-5        # L2 on the user/pos/neg embeddings of each example
+  init_std: 0.01
+train:
+  epochs: 100
+  batch_size: 1024
+  lr: 1.0e-3
+  weight_decay: 0.0
+  eval_every: 1
+  patience: 5           # validation rounds without NDCG@10 improvement
+  monitor: NDCG@10
+  eval_batch_size: 1024

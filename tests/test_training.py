@@ -16,6 +16,7 @@ from recsys.models import TorchRecommender, build_model, load_model
 
 TINY_PARAMS: dict[str, dict[str, Any]] = {
     "mf": {"embedding_dim": 8},
+    "two_tower": {"id_dim": 8, "feature_dim": 4, "hidden_dims": [16], "output_dim": 8},
 }
 TRAINABLE = list(TINY_PARAMS)
 

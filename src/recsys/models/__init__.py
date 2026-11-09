@@ -10,9 +10,10 @@ from recsys.config import ExperimentConfig, from_dict
 from recsys.models.base import Recommender, TorchRecommender
 from recsys.models.mf import MFRecommender
 from recsys.models.popular import PopularRecommender
+from recsys.models.two_tower import TwoTowerRecommender
 
 MODEL_REGISTRY: dict[str, type[Recommender]] = {
-    cls.name: cls for cls in (PopularRecommender, MFRecommender)
+    cls.name: cls for cls in (PopularRecommender, MFRecommender, TwoTowerRecommender)
 }
 
 __all__ = [
@@ -21,6 +22,7 @@ __all__ = [
     "PopularRecommender",
     "Recommender",
     "TorchRecommender",
+    "TwoTowerRecommender",
     "build_model",
     "load_model",
 ]

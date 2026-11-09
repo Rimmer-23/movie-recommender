@@ -1,0 +1,22 @@
+# Two-tower model: user tower (ID + demographics) and item tower (ID + genres),
+# trained with in-batch negatives, softmax loss and logQ popularity correction.
+model: two_tower
+seed: 42
+params:
+  id_dim: 64
+  feature_dim: 16
+  hidden_dims: [128]
+  output_dim: 64
+  dropout: 0.1
+  temperature: 0.05
+  logq_correction: true
+  use_features: true
+train:
+  epochs: 50
+  batch_size: 1024      # = 1023 in-batch negatives per positive
+  lr: 1.0e-3
+  weight_decay: 0.0
+  eval_every: 1
+  patience: 5
+  monitor: NDCG@10
+  eval_batch_size: 1024

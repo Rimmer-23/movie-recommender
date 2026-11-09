@@ -280,7 +280,7 @@ def build_split(processed: ProcessedData) -> SplitData:
     log = processed.interactions
     n_users = int(log["user_idx"].max()) + 1
     boundaries = np.cumsum(np.bincount(log["user_idx"].to_numpy(), minlength=n_users))[:-1]
-    sequences = np.split(log["item_idx"].to_numpy(dtype=np.int64), boundaries)
+    sequences = np.split(log["item_idx"].to_numpy(dtype=np.int64, copy=True), boundaries)
     return SplitData(
         sequences=sequences,
         n_items=int(processed.items["item_idx"].max()),

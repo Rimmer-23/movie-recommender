@@ -1,0 +1,3 @@
+# Most Popular baseline: ranks items by train interaction count. Nothing to tune.
+model: popular
+seed: 42

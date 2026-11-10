@@ -193,6 +193,8 @@ curl "http://localhost:8000/health"
 curl "http://localhost:8000/recommend/1?k=5"
 ```
 
+![Swagger UI: GET /recommend/1?k=5](docs/api_swagger.png)
+
 User 1's most recent ratings are *Aladdin, Toy Story, A Bug's Life, Antz, Hunchback of
 Notre Dame, Hercules, Mulan, Pocahontas*. SASRec continues the sequence:
 

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import numpy as np
 import torch
 
 from recsys.config import ExperimentConfig, TrainConfig
 from recsys.data import SplitData
-from recsys.models import build_model
+from recsys.models import build_model, load_model
 from recsys.models.two_tower import TwoTowerParams, TwoTowerRecommender, in_batch_logits
 
 
@@ -74,6 +77,28 @@ def test_training_step_is_finite(split: SplitData) -> None:
     batch = {"users": torch.tensor([0, 0, 1, 2]), "items": torch.tensor([5, 6, 5, 7])}
     loss = model.training_step(batch)
     assert torch.isfinite(loss) and loss.item() > 0
+
+
+def test_loaded_model_caches_item_vectors(split: SplitData, tmp_path: Path) -> None:
+    model = make_model(split)
+    model.net.eval()
+    users = np.arange(split.n_users)
+    assert model._item_vectors is None  # weights may still change: nothing is cached
+    path = tmp_path / "two_tower.pt"
+    model.save(path)
+
+    restored = load_model(path, device="cpu")
+    assert isinstance(restored, TwoTowerRecommender)
+    assert restored._item_vectors.shape == (split.n_items + 1, 8)
+    with torch.no_grad():
+        torch.testing.assert_close(restored.score(users), model.score(users))
+
+    restored.train_config.epochs = 1
+    restored.fit(split)  # training invalidates the cache
+    assert restored._item_vectors is None
+    with torch.no_grad():
+        expected = restored.net.score_all(torch.as_tensor(users))
+        torch.testing.assert_close(restored.score(users), expected)
 
 
 def test_params_defaults_are_valid() -> None:

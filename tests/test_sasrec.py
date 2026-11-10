@@ -48,6 +48,24 @@ def test_future_items_do_not_affect_past_positions() -> None:
     assert not torch.allclose(ha[:, 4:], hb[:, 4:])
 
 
+def test_last_only_matches_full_forward() -> None:
+    net = make_net()
+    seqs = torch.tensor([[0, 0, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6], [0, 0, 0, 0, 0, 0]])
+    with torch.no_grad():
+        full, last = net(seqs), net(seqs, last_only=True)
+    assert last.shape == (3, 1, 16)
+    torch.testing.assert_close(last, full[:, -1:])
+
+
+def test_shorter_input_is_right_aligned() -> None:
+    net = make_net()
+    padded = torch.tensor([[0, 0, 0, 7, 8, 9]])
+    with torch.no_grad():
+        # Dropping leading padding must not change anything: positions count from the end.
+        torch.testing.assert_close(net(padded[:, 3:]), net(padded)[:, 3:])
+        torch.testing.assert_close(net(padded[:, 2:], last_only=True), net(padded)[:, -1:])
+
+
 def test_padding_items_are_ignored() -> None:
     net = make_net()
     # Same real items; the padding id is 0 so no other item can sneak into padded slots.

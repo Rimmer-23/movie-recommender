@@ -15,6 +15,7 @@ training logits so that the model estimates the full-softmax scores instead.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -75,9 +76,9 @@ def in_batch_logits(
     logits = user_vecs @ item_vecs.T / temperature  # (batch, batch)
     if log_q is not None:
         logits = logits - log_q[None, :]
-    eye = torch.eye(len(users), dtype=torch.bool, device=users.device)
     false_negatives = (items[:, None] == items[None, :]) | (users[:, None] == users[None, :])
-    return logits.masked_fill(false_negatives & ~eye, float("-inf"))
+    false_negatives.fill_diagonal_(False)  # the diagonal holds the positives themselves
+    return logits.masked_fill(false_negatives, float("-inf"))
 
 
 def mlp(in_dim: int, hidden_dims: list[int], out_dim: int, dropout: float) -> nn.Sequential:
@@ -165,10 +166,22 @@ class TwoTowerNet(nn.Module):
         if self.item_tower.use_genres:
             self.item_tower.genres.copy_(torch.from_numpy(item_genres))
 
-    def score_all(self, users: torch.Tensor) -> torch.Tensor:
-        """``(batch,)`` → ``(batch, n_items + 1)`` scores against the whole catalogue."""
-        all_items = torch.arange(self.item_tower.id_emb.num_embeddings, device=users.device)
-        item_vectors = self.item_tower(all_items)  # (n_items + 1, output_dim)
+    def item_vectors(self) -> torch.Tensor:
+        """Item tower output for the whole catalogue, ``(n_items + 1, output_dim)``."""
+        device = self.item_tower.id_emb.weight.device
+        all_items = torch.arange(self.item_tower.id_emb.num_embeddings, device=device)
+        return self.item_tower(all_items)
+
+    def score_all(
+        self, users: torch.Tensor, item_vectors: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """``(batch,)`` → ``(batch, n_items + 1)`` scores against the whole catalogue.
+
+        Pass precomputed :meth:`item_vectors` to skip the item tower (the usual two-tower
+        serving setup: item vectors are computed once, only the user tower runs per request).
+        """
+        if item_vectors is None:
+            item_vectors = self.item_vectors()  # (n_items + 1, output_dim)
         return self.user_tower(users) @ item_vectors.T / self.temperature
 
 
@@ -179,6 +192,19 @@ class TwoTowerRecommender(TorchRecommender):
     display_name = "Two-tower"
     Params = TwoTowerParams
     params: TwoTowerParams
+
+    # Item vectors of a loaded (frozen) model; ``None`` while the weights can still change.
+    _item_vectors: torch.Tensor | None = None
+
+    def fit(self, data: SplitData, log_dir: Path | None = None) -> TwoTowerRecommender:
+        self._item_vectors = None  # stale as soon as training starts
+        super().fit(data, log_dir)
+        return self
+
+    def set_state(self, state: dict[str, Any]) -> None:
+        super().set_state(state)
+        with torch.no_grad():
+            self._item_vectors = self.net.item_vectors()  # (n_items + 1, output_dim)
 
     def get_net_kwargs(self, data: SplitData) -> dict[str, Any]:
         if not self.params.use_features:
@@ -229,4 +255,4 @@ class TwoTowerRecommender(TorchRecommender):
 
     def score(self, user_ids: np.ndarray) -> torch.Tensor:
         users = torch.as_tensor(user_ids, dtype=torch.long, device=self.device)
-        return self.net.score_all(users)  # (batch, n_items + 1)
+        return self.net.score_all(users, self._item_vectors)  # (batch, n_items + 1)

@@ -56,22 +56,31 @@ class CausalSelfAttention(nn.Module):
         self.qkv = nn.Linear(hidden_dim, 3 * hidden_dim)
         self.proj = nn.Linear(hidden_dim, hidden_dim)
 
-    def forward(self, x: torch.Tensor, allowed: torch.Tensor) -> torch.Tensor:
+    def forward(
+        self, x: torch.Tensor, allowed: torch.Tensor, last_only: bool = False
+    ) -> torch.Tensor:
         """Args:
         x: ``(batch, seq_len, hidden)`` input.
-        allowed: ``(batch, 1, seq_len, seq_len)`` bool, ``True`` where query i may attend
+        allowed: ``(batch, 1, n_queries, seq_len)`` bool, ``True`` where query i may attend
             to key j.
+        last_only: Use only the final position as a query (``n_queries = 1``); otherwise
+            every position is a query (``n_queries = seq_len``).
+
+        Returns:
+            ``(batch, n_queries, hidden)``.
         """
-        batch, seq_len, hidden = x.shape
+        batch, _, hidden = x.shape
         head_dim = hidden // self.n_heads
         q, k, v = self.qkv(x).split(hidden, dim=-1)  # each (batch, seq_len, hidden)
+        if last_only:
+            q = q[:, -1:]  # (batch, 1, hidden)
         q, k, v = (
-            t.view(batch, seq_len, self.n_heads, head_dim).transpose(1, 2) for t in (q, k, v)
-        )  # each (batch, heads, seq_len, head_dim)
+            t.view(batch, -1, self.n_heads, head_dim).transpose(1, 2) for t in (q, k, v)
+        )  # q: (batch, heads, n_queries, head_dim); k, v: (batch, heads, seq_len, head_dim)
         out = F.scaled_dot_product_attention(
             q, k, v, attn_mask=allowed, dropout_p=self.dropout if self.training else 0.0
-        )  # (batch, heads, seq_len, head_dim)
-        out = out.transpose(1, 2).reshape(batch, seq_len, hidden)  # (batch, seq_len, hidden)
+        )  # (batch, heads, n_queries, head_dim)
+        out = out.transpose(1, 2).reshape(batch, -1, hidden)  # (batch, n_queries, hidden)
         return self.proj(out)
 
 
@@ -91,9 +100,18 @@ class TransformerBlock(nn.Module):
         )
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x: torch.Tensor, allowed: torch.Tensor) -> torch.Tensor:
-        """``(batch, seq_len, hidden)`` → ``(batch, seq_len, hidden)``."""
-        x = x + self.dropout(self.attn(self.attn_norm(x), allowed))
+    def forward(
+        self, x: torch.Tensor, allowed: torch.Tensor, last_only: bool = False
+    ) -> torch.Tensor:
+        """``(batch, seq_len, hidden)`` → ``(batch, seq_len, hidden)``.
+
+        With ``last_only`` only the final position is computed — it still attends to the
+        whole sequence — and the output is ``(batch, 1, hidden)``.
+        """
+        attended = self.attn(self.attn_norm(x), allowed, last_only)  # (batch, n_queries, hidden)
+        if last_only:
+            x = x[:, -1:]  # (batch, 1, hidden)
+        x = x + self.dropout(attended)
         return x + self.dropout(self.ffn(self.ffn_norm(x)))
 
 
@@ -128,17 +146,31 @@ class SASRecNet(nn.Module):
         diagonal = torch.eye(seq_len, dtype=torch.bool, device=is_pad.device)
         return (allowed | diagonal[None])[:, None]  # (batch, 1, seq_len, seq_len)
 
-    def forward(self, seqs: torch.Tensor) -> torch.Tensor:
-        """Encode left-padded sequences: ``(batch, seq_len)`` → ``(batch, seq_len, hidden)``."""
+    def forward(self, seqs: torch.Tensor, last_only: bool = False) -> torch.Tensor:
+        """Encode left-padded sequences: ``(batch, seq_len)`` → ``(batch, seq_len, hidden)``.
+
+        Args:
+            seqs: Item ids, left-padded with 0. ``seq_len`` may be shorter than ``max_len``;
+                positions are aligned to the right so the last item always gets the same
+                positional embedding.
+            last_only: Return only the final position, ``(batch, 1, hidden)``. That is all
+                next-item inference needs, and it lets the last block skip the other
+                ``seq_len - 1`` queries.
+        """
+        seq_len, max_len = seqs.shape[1], self.pos_emb.num_embeddings
         is_pad = seqs == PAD_ITEM  # (batch, seq_len)
         keep = (~is_pad).unsqueeze(-1)  # (batch, seq_len, 1)
-        positions = torch.arange(seqs.shape[1], device=seqs.device)  # (seq_len,)
+        positions = torch.arange(max_len - seq_len, max_len, device=seqs.device)  # (seq_len,)
         x = self.item_emb(seqs) * math.sqrt(self.hidden_dim) + self.pos_emb(positions)
         x = self.emb_dropout(x) * keep  # (batch, seq_len, hidden)
-        allowed = self.attention_mask(is_pad)
-        for block in self.blocks:
-            x = block(x, allowed) * keep
-        return self.final_norm(x)
+        allowed = self.attention_mask(is_pad)  # (batch, 1, seq_len, seq_len)
+        final = len(self.blocks) - 1
+        for i, block in enumerate(self.blocks):
+            if last_only and i == final:
+                x = block(x, allowed[:, :, -1:], last_only=True) * keep[:, -1:]
+            else:
+                x = block(x, allowed) * keep
+        return self.final_norm(x[:, -1:] if last_only else x)
 
     def logits(self, hidden: torch.Tensor) -> torch.Tensor:
         """Scores against all items: ``(..., hidden)`` → ``(..., n_items + 1)``."""
@@ -171,6 +203,11 @@ class SASRecRecommender(TorchRecommender):
         return F.cross_entropy(logits, batch["targets"][is_target])
 
     def score(self, user_ids: np.ndarray) -> torch.Tensor:
-        seqs = np.stack([pad_left(self.history[u], self.params.max_len) for u in user_ids])
-        hidden = self.net(torch.from_numpy(seqs).to(self.device))  # (batch, max_len, hidden)
-        return self.net.logits(hidden[:, -1])  # (batch, n_items + 1)
+        histories = [self.history[u] for u in user_ids]
+        # Pad only to the longest history in the batch: attention is O(seq_len^2), and a
+        # single user (the API case) is usually far shorter than max_len.
+        longest = max((len(history) for history in histories), default=0)
+        seq_len = min(max(longest, 1), self.params.max_len)
+        seqs = np.stack([pad_left(history, seq_len) for history in histories])
+        hidden = self.net(torch.from_numpy(seqs).to(self.device), last_only=True)
+        return self.net.logits(hidden[:, 0])  # (batch, 1, hidden) → (batch, n_items + 1)

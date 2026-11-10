@@ -1,6 +1,11 @@
 # Movie Recommender — a PyTorch RecSys on MovieLens 1M
 
-[![CI](https://github.com/rimmer-23/movie-recommender/actions/workflows/ci.yml/badge.svg)](https://github.com/rimmer-23/movie-recommender/actions/workflows/ci.yml)
+[![CI](https://github.com/Rimmer-23/movie-recommender/actions/workflows/ci.yml/badge.svg)](https://github.com/Rimmer-23/movie-recommender/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-serving-009688?logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
+![Ruff](https://img.shields.io/badge/code%20style-ruff-D7FF64)
 
 An end-to-end recommender system built from scratch in **PyTorch**: data pipeline,
 four models of increasing sophistication (Most Popular → BPR matrix factorisation →
@@ -8,9 +13,30 @@ two-tower retrieval → SASRec), a single leakage-free **full-ranking** evaluati
 a **FastAPI** recommendation service, a batch export to a warehouse-style **parquet** table,
 Docker and CI.
 
-**Headline:** the sequential model (SASRec) reaches **NDCG@10 = 0.175** on the held-out test
-set — about **4.8× BPR matrix factorisation** and **9.7× the popularity baseline** — under a
-strict full-ranking protocol over the whole catalogue.
+> **TL;DR** — the sequential model (SASRec) reaches **NDCG@10 = 0.175** on the held-out test
+> set: about **4.8× BPR matrix factorisation** and **9.7× the popularity baseline**, ranking
+> against the whole catalogue of 3,706 movies (no sampled negatives).
+
+### What this project demonstrates
+
+- **Modelling:** four recommenders implemented from scratch behind one interface — BPR with
+  negative sampling, a two-tower model with in-batch softmax and logQ correction, and a causal
+  Transformer (SASRec) with explicit attention masks.
+- **Evaluation rigour:** leave-one-out by time, full ranking, seen-item exclusion, validation-only
+  model selection, fixed seeds, unit-tested metrics and leakage tests.
+- **Engineering:** config-driven training (YAML → dataclasses), shared training loop with early
+  stopping and TensorBoard, 64 pytest tests on synthetic data, ruff, GitHub Actions.
+- **Delivery:** REST API with a cold-start fallback, a typed parquet export for a data
+  warehouse, and a slim CPU-only Docker image.
+
+### Quick start
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -e ".[dev]"
+python scripts/download_data.py && python scripts/train.py --model all
+python scripts/evaluate.py && uvicorn recsys.api:app --port 8000
+# → http://localhost:8000/docs
+```
 
 ## Results
 

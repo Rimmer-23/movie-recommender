@@ -21,7 +21,7 @@ dependencies = [
 
 [project.optional-dependencies]
 train = [
-    "tensorboard>=2.16",
+    "tensorboard>=2.21.0",
     "matplotlib>=3.8",
 ]
 dev = [

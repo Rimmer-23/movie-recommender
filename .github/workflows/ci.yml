@@ -36,13 +36,54 @@ jobs:
       - name: Ruff format
         run: ruff format --check .
 
-      - name: Tests
-        run: pytest
+      - name: Tests with coverage
+        run: pytest --cov --cov-report=term-missing
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          echo "### Coverage (Python ${{ matrix.python-version }})" >> "$GITHUB_STEP_SUMMARY"
+          coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY" || true
 
   docker:
-    name: Docker image builds
+    name: Docker image builds and serves
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Build API image
         run: docker build -t movie-recommender:ci .
+
+      # No real data or checkpoints exist in CI, so the image itself generates a tiny
+      # synthetic dataset and model; this also proves its PyTorch install can train.
+      - name: Generate smoke-test artifacts inside the image
+        run: |
+          docker run --rm --user root -v "$PWD:/work" -w /work movie-recommender:ci \
+            python scripts/make_smoke_artifacts.py --output smoke
+
+      - name: Start the API container
+        run: |
+          docker run -d --name api -p 8000:8000 \
+            -v "$PWD/smoke/artifacts:/app/artifacts:ro" \
+            -v "$PWD/smoke/data/processed:/app/data/processed:ro" \
+            movie-recommender:ci
+          for _ in $(seq 1 30); do
+            curl -fs http://localhost:8000/health && exit 0
+            sleep 2
+          done
+          echo "API did not become healthy in time" && exit 1
+
+      - name: Smoke-test the endpoints
+        run: |
+          set -euo pipefail
+          curl -fs http://localhost:8000/health | jq -e '.status == "ok" and .model == "mf"'
+          known=$(cat smoke/known_user_id.txt)
+          curl -fs "http://localhost:8000/recommend/${known}?k=5" \
+            | jq -e '.fallback == false and (.recommendations | length) == 5'
+          curl -fs "http://localhost:8000/recommend/999999?k=3" \
+            | jq -e '.fallback == true and .model == "popular" and (.recommendations | length) == 3'
+          test "$(curl -s -o /dev/null -w '%{http_code}' 'http://localhost:8000/recommend/1?k=0')" = 422
+
+      - name: Container logs
+        if: always()
+        run: docker logs api || true

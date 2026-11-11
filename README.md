@@ -120,6 +120,7 @@ flowchart LR
 
 - Data and trained models are **not** in the repo (MovieLens license) — the scripts download and
   create them.
-- Tests and linting: `pytest` and `ruff check .` (also run by CI on every push).
+- Tests and linting: `pytest --cov` and `ruff check .` (also run by CI on every push).
+- CI also builds the Docker image, starts it on a tiny synthetic dataset and checks the endpoints.
 - Possible next steps: use watch history in the two-tower model, an ANN index for fast
   retrieval, experiment tracking.

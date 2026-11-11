@@ -1,6 +1,7 @@
 # Data and model artifacts are never committed (MovieLens license forbids redistribution).
 data/
 artifacts/
+smoke/
 
 # Python
 __pycache__/

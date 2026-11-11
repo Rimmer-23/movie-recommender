@@ -31,7 +31,7 @@ dev = [
     "httpx>=0.27",
     "ruff>=0.6",
     "nbformat>=5.9",
-    "nbconvert>=7.0",
+    "nbconvert>=7.17.2",
     "ipykernel>=6.0",
 ]
 
